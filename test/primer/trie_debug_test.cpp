@@ -41,6 +41,9 @@ TEST(TrieDebugger, TestCase) {
   }
 
   // Put a breakpoint here.
+  std::cout << "answer 1: " << trie.GetRoot()->children_.size() << std::endl;
+  std::cout << "answer 2: " << trie.GetRoot()->children_.at('9')->children_.size() << std::endl;
+  std::cout << "answer 3: " << *trie.Get<uint32_t>("969") << std::endl;
 
   // (1) How many children nodes are there on the root?
   // Replace `CASE_1_YOUR_ANSWER` in `trie_answer.h` with the correct answer.
