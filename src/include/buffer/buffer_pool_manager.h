@@ -20,7 +20,7 @@
 #include "buffer/lru_k_replacer.h"
 #include "common/config.h"
 #include "recovery/log_manager.h"
-#include "storage/disk/disk_manager.h"
+#include "storage/disk/disk_scheduler.h"
 #include "storage/page/page.h"
 #include "storage/page/page_guard.h"
 
@@ -62,7 +62,7 @@ class BufferPoolManager {
    * first), and then call the AllocatePage() method to get a new page id. If the replacement frame has a dirty page,
    * you should write it back to the disk first. You also need to reset the memory and metadata for the new page.
    *
-   * Remember to "Pin" the frame by calling replacer.SetEvictable(frame_id, false)
+   * Remember to "Pin" the frame by calling replacer_.SetEvictable(frame_id, false)
    * so that the replacer wouldn't evict the frame before the buffer pool manager "Unpin"s it.
    * Also, remember to record the access history of the frame in the replacer for the lru-k algorithm to work.
    *
@@ -72,7 +72,7 @@ class BufferPoolManager {
   auto NewPage(page_id_t *page_id) -> Page *;
 
   /**
-   * TODO(P1): Add implementation
+   * TODO(P2): Add implementation
    *
    * @brief PageGuard wrapper for NewPage
    *
@@ -92,9 +92,9 @@ class BufferPoolManager {
    * but all frames are currently in use and not evictable (in another word, pinned).
    *
    * First search for page_id in the buffer pool. If not found, pick a replacement frame from either the free list or
-   * the replacer (always find from the free list first), read the page from disk by calling disk_manager_->ReadPage(),
-   * and replace the old page in the frame. Similar to NewPage(), if the old page is dirty, you need to write it back
-   * to disk and update the metadata of the new page
+   * the replacer (always find from the free list first), read the page from disk by scheduling a read DiskRequest with
+   * disk_scheduler_->Schedule(), and replace the old page in the frame. Similar to NewPage(), if the old page is dirty,
+   * you need to write it back to disk and update the metadata of the new page
    *
    * In addition, remember to disable eviction and record the access history of the frame like you did for NewPage().
    *
@@ -105,7 +105,7 @@ class BufferPoolManager {
   auto FetchPage(page_id_t page_id, AccessType access_type = AccessType::Unknown) -> Page *;
 
   /**
-   * TODO(P1): Add implementation
+   * TODO(P2): Add implementation
    *
    * @brief PageGuard wrappers for FetchPage
    *
@@ -142,7 +142,7 @@ class BufferPoolManager {
    *
    * @brief Flush the target page to disk.
    *
-   * Use the DiskManager::WritePage() method to flush a page to disk, REGARDLESS of the dirty flag.
+   * Use the DiskScheduler -> Schedule() to flush a page to disk, REGARDLESS of the dirty flag.
    * Unset the dirty flag of the page after flushing.
    *
    * @param page_id id of page to be flushed, cannot be INVALID_PAGE_ID
@@ -172,6 +172,8 @@ class BufferPoolManager {
    */
   auto DeletePage(page_id_t page_id) -> bool;
 
+  auto HasFreeFrame(frame_id_t *frame_id) -> bool;
+
  private:
   /** Number of pages in the buffer pool. */
   const size_t pool_size_;
@@ -180,8 +182,8 @@ class BufferPoolManager {
 
   /** Array of buffer pool pages. */
   Page *pages_;
-  /** Pointer to the disk manager. */
-  DiskManager *disk_manager_ __attribute__((__unused__));
+  /** Pointer to the disk sheduler. */
+  std::unique_ptr<DiskScheduler> disk_scheduler_ __attribute__((__unused__));
   /** Pointer to the log manager. Please ignore this for P1. */
   LogManager *log_manager_ __attribute__((__unused__));
   /** Page table for keeping track of buffer pool pages. */

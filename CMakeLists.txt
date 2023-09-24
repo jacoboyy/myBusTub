@@ -271,12 +271,12 @@ add_custom_target(submit-p0
 )
 
 set(P1_FILES
-        "src/include/storage/page/page_guard.h"
-        "src/storage/page/page_guard.cpp"
         "src/include/buffer/lru_k_replacer.h"
         "src/buffer/lru_k_replacer.cpp"
         "src/include/buffer/buffer_pool_manager.h"
         "src/buffer/buffer_pool_manager.cpp"
+        "src/include/storage/disk/disk_scheduler.h"
+        "src/storage/disk/disk_scheduler.cpp"
 )
 add_custom_target(check-clang-tidy-p1
         ${BUSTUB_BUILD_SUPPORT_DIR}/run_clang_tidy.py # run LLVM's clang-tidy script
