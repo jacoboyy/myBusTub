@@ -62,7 +62,7 @@ class BufferPoolManager {
    * first), and then call the AllocatePage() method to get a new page id. If the replacement frame has a dirty page,
    * you should write it back to the disk first. You also need to reset the memory and metadata for the new page.
    *
-   * Remember to "Pin" the frame by calling replacer.SetEvictable(frame_id, false)
+   * Remember to "Pin" the frame by calling replacer_.SetEvictable(frame_id, false)
    * so that the replacer wouldn't evict the frame before the buffer pool manager "Unpin"s it.
    * Also, remember to record the access history of the frame in the replacer for the lru-k algorithm to work.
    *
@@ -142,7 +142,7 @@ class BufferPoolManager {
    *
    * @brief Flush the target page to disk.
    *
-   * Use the DiskManager::WritePage() method to flush a page to disk, REGARDLESS of the dirty flag.
+   * Use the DiskScheduler -> Schedule() to flush a page to disk, REGARDLESS of the dirty flag.
    * Unset the dirty flag of the page after flushing.
    *
    * @param page_id id of page to be flushed, cannot be INVALID_PAGE_ID
@@ -171,6 +171,8 @@ class BufferPoolManager {
    * @return false if the page exists but could not be deleted, true if the page didn't exist or deletion succeeded
    */
   auto DeletePage(page_id_t page_id) -> bool;
+
+  auto HasFreeFrame(frame_id_t *frame_id) -> bool;
 
  private:
   /** Number of pages in the buffer pool. */
