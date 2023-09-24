@@ -57,16 +57,16 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
   }
   size_t &num_hits = ++node_store_[frame_id].num_hits_;
   if (num_hits == 1) {
-    less_k_lst_.push_back(frame_id);
+    less_k_lst_.emplace_back(frame_id);
     node_store_[frame_id].pos_ = std::prev(less_k_lst_.end());
   }
   if (num_hits == k_) {
     less_k_lst_.erase(node_store_[frame_id].pos_);
-    main_lst_.push_back(frame_id);
+    main_lst_.emplace_back(frame_id);
     node_store_[frame_id].pos_ = std::prev(main_lst_.end());
   } else if (num_hits > k_) {
     main_lst_.erase(node_store_[frame_id].pos_);
-    main_lst_.push_back(frame_id);
+    main_lst_.emplace_back(frame_id);
     node_store_[frame_id].pos_ = std::prev(main_lst_.end());
   }
 }
@@ -96,7 +96,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
     return;
   }
   if (!node_store_[frame_id].is_evictable_) {
-    throw std::runtime_error("frame is not evictable");
+    throw std::runtime_error("Remove: frame is not evictable");
   }
 
   if (node_store_[frame_id].num_hits_ < k_) {
