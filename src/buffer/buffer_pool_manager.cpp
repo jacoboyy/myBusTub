@@ -11,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "buffer/buffer_pool_manager.h"
+#include <cstddef>
+#include <iterator>
 #include <stdexcept>
 
 #include "common/config.h"
@@ -58,7 +60,7 @@ auto BufferPoolManager::HasFreeFrame(frame_id_t *frame_id) -> bool {
     // reset memory and meta data
     pages_[*frame_id].ResetMemory();
     pages_[*frame_id].pin_count_ = 0;
-    page_table_.erase(pages_[*frame_id].page_id_);
+    page_table_[pages_[*frame_id].page_id_] = -1;
     pages_[*frame_id].page_id_ = INVALID_PAGE_ID;
     return true;
   }
@@ -71,7 +73,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   if (HasFreeFrame(&frame_id)) {
     *page_id = AllocatePage();
     // update page table entry
-    page_table_[*page_id] = frame_id;
+    page_table_.emplace_back(frame_id);
     // update page entry
     pages_[frame_id].page_id_ = *page_id;
     ++pages_[frame_id].pin_count_;
@@ -88,7 +90,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   std::scoped_lock<std::mutex> slk(latch_);
   frame_id_t frame_id;
   // page already in buffered pool
-  if (page_table_.find(page_id) != page_table_.end()) {
+  if (static_cast<size_t>(page_id) < page_table_.size() && page_table_[page_id] >= 0) {
     frame_id = page_table_[page_id];
     // pin page
     ++pages_[frame_id].pin_count_;
@@ -122,7 +124,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
 auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unused]] AccessType access_type) -> bool {
   std::scoped_lock<std::mutex> slk(latch_);
   // page_id not in buffer pool
-  if (page_table_.find(page_id) == page_table_.end()) {
+  if (static_cast<size_t>(page_id) >= page_table_.size() || page_table_[page_id] < 0) {
     return false;
   }
 
@@ -145,7 +147,7 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
 auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   std::scoped_lock<std::mutex> slk(latch_);
   // page not in buffer pool
-  if (page_table_.find(page_id) == page_table_.end()) {
+  if (static_cast<size_t>(page_id) >= page_table_.size() || page_table_[page_id] < 0) {
     return false;
   }
   frame_id_t frame_id = page_table_[page_id];
@@ -162,20 +164,23 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
 
 void BufferPoolManager::FlushAllPages() {
   std::scoped_lock<std::mutex> slk(latch_);
-  for (const auto &[page_id, frame_id] : page_table_) {
-    auto promise = disk_scheduler_->CreatePromise();
-    auto future = promise.get_future();
-    disk_scheduler_->Schedule({true, pages_[frame_id].data_, page_id, std::move(promise)});
-    if (!future.get()) {
-      throw std::runtime_error("FlushAllPages: failed to flush page to disk");
+  for (auto it = page_table_.begin(); it != page_table_.end(); ++it) {
+    if (*it >= 0) {
+      auto promise = disk_scheduler_->CreatePromise();
+      auto future = promise.get_future();
+      page_id_t page_id = std::distance(page_table_.begin(), it);
+      disk_scheduler_->Schedule({true, pages_[*it].data_, page_id, std::move(promise)});
+      if (!future.get()) {
+        throw std::runtime_error("FlushAllPages: failed to flush page to disk");
+      }
+      pages_[*it].is_dirty_ = false;
     }
-    pages_[frame_id].is_dirty_ = false;
   }
 }
 
 auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   std::scoped_lock<std::mutex> slk(latch_);
-  if (page_table_.find(page_id) == page_table_.end()) {
+  if (static_cast<size_t>(page_id) >= page_table_.size() || page_table_[page_id] < 0) {
     return true;
   }
 
@@ -185,7 +190,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   }
 
   // page is already unpinned
-  page_table_.erase(page_id);
+  page_table_[page_id] = -1;
   replacer_->Remove(frame_id);
   free_list_.emplace_back(frame_id);
   // update pages
