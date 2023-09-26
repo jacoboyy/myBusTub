@@ -187,7 +187,7 @@ class BufferPoolManager {
   /** Pointer to the log manager. Please ignore this for P1. */
   LogManager *log_manager_ __attribute__((__unused__));
   /** Page table for keeping track of buffer pool pages. */
-  std::unordered_map<page_id_t, frame_id_t> page_table_;
+  std::vector<frame_id_t> page_table_;
   /** Replacer to find unpinned pages for replacement. */
   std::unique_ptr<LRUKReplacer> replacer_;
   /** List of free frames that don't have any pages on them. */
