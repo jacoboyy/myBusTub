@@ -79,6 +79,13 @@ class ExtendibleHTableBucketPage {
   auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &cmp) -> bool;
 
   /**
+   * @brief Directly append a key-value pair to the back of the bucket list
+   * @param pair key-value pair
+   * @pre key is unique and list is not full
+   */
+  void Append(std::pair<KeyType, ValueType> pair);
+
+  /**
    * Removes a key and value.
    *
    * @return true if removed, false if not found
@@ -86,6 +93,17 @@ class ExtendibleHTableBucketPage {
   auto Remove(const KeyType &key, const KeyComparator &cmp) -> bool;
 
   void RemoveAt(uint32_t bucket_idx);
+
+  /**
+   * @brief Remove and return the last element in the bucket
+   * @return key-value pair at the last index of the bucket
+   */
+  auto Pop() -> std::pair<KeyType, ValueType>;
+
+  /**
+   * @brief swap the entries at index i and index j
+   */
+  void Swap(int i, int j);
 
   /**
    * @brief Gets the key at an index in the bucket.

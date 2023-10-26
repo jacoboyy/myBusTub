@@ -86,6 +86,11 @@ class DiskExtendibleHashTable {
   auto GetValue(const K &key, std::vector<V> *result, Transaction *transaction = nullptr) const -> bool;
 
   /**
+   * @brief Recursively merge an empty bucket with its split image
+   */
+  void Merge(uint32_t directory_idx, uint32_t bucket_idx);
+
+  /**
    * Helper function to verify the integrity of the extendible hash table's directory.
    */
   void VerifyIntegrity() const;
