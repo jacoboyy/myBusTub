@@ -218,6 +218,12 @@ auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
   return {this, page};
 }
 
-auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard { return {this, NewPage(page_id)}; }
+auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard {
+  Page *page = NewPage(page_id);
+  if (page == nullptr) {
+    throw std::runtime_error("buffer pool is full: cannot obtain new page");
+  }
+  return {this, page};
+}
 
 }  // namespace bustub
