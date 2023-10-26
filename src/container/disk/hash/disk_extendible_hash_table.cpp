@@ -67,7 +67,7 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
   }
   ReadPageGuard directory_page_guard = bpm_->FetchPageRead(directory_page_id);
   auto directory_page = directory_page_guard.As<ExtendibleHTableDirectoryPage>();
-  header_guard.Drop(); // unpin header page after obtaining directory page
+  header_guard.Drop();  // unpin header page after obtaining directory page
   // fetch bucket page
   auto bucket_page_id = directory_page->GetBucketPageId(directory_page->HashToBucketIndex(hash));
   if (bucket_page_id == INVALID_PAGE_ID) {
@@ -76,7 +76,7 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
   ReadPageGuard bucket_page_guard = bpm_->FetchPageRead(bucket_page_id);
   const ExtendibleHTableBucketPage<K, V, KC> *bucket_page;
   bucket_page = bucket_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
-  directory_page_guard.Drop(); // unpin directory page after obtaining bucket page
+  directory_page_guard.Drop();  // unpin directory page after obtaining bucket page
   // search key in the bucket_page
   V value;
   if (bucket_page->Lookup(key, value, cmp_)) {
