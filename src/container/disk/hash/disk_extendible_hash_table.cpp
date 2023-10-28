@@ -74,8 +74,7 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
     return false;
   }
   ReadPageGuard bucket_page_guard = bpm_->FetchPageRead(bucket_page_id);
-  const ExtendibleHTableBucketPage<K, V, KC> *bucket_page;
-  bucket_page = bucket_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
+  auto bucket_page = bucket_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
   directory_page_guard.Drop();  // unpin directory page after obtaining bucket page
   // search key in the bucket_page
   V value;
@@ -131,7 +130,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
     return false;
   }
   // check if bucket is full
-  if (bucket_page->Insert(key, value, cmp_)) {
+  if (!bucket_page->IsFull()) {
+    bucket_page->Append({key, value});
     return true;
   }
   // grow directory, if needed
@@ -147,8 +147,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   // create new buckets
   auto new_bucket_page_id = INVALID_PAGE_ID;
   WritePageGuard new_bucket_page_guard = bpm_->NewPageGuarded(&new_bucket_page_id).UpgradeWrite();
-  ExtendibleHTableBucketPage<K, V, KC> *new_bucket_page;
-  new_bucket_page = new_bucket_page_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+  auto new_bucket_page = new_bucket_page_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
   new_bucket_page->Init(bucket_max_size_);
   // rehash keys in the original bucket
   int idx = 0;
@@ -226,10 +225,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
   if (bucket_page_id == INVALID_PAGE_ID) {
     return false;
   }
-  WritePageGuard bucket_page_guard;
-  ExtendibleHTableBucketPage<K, V, KC> *bucket_page;
-  bucket_page_guard = bpm_->FetchPageWrite(bucket_page_id);
-  bucket_page = bucket_page_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+  WritePageGuard bucket_page_guard = bpm_->FetchPageWrite(bucket_page_id);
+  auto bucket_page = bucket_page_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
   // try to remove key from the bucket
   if (!bucket_page->Remove(key, cmp_)) {
     // key not found
@@ -260,10 +257,8 @@ void DiskExtendibleHashTable<K, V, KC>::Merge(uint32_t directory_idx, uint32_t b
   if (bucket_page_id == INVALID_PAGE_ID) {
     return;
   }
-  ReadPageGuard bucket_page_guard;
-  const ExtendibleHTableBucketPage<K, V, KC> *bucket_page;
-  bucket_page_guard = bpm_->FetchPageRead(bucket_page_id);
-  bucket_page = bucket_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
+  ReadPageGuard bucket_page_guard = bpm_->FetchPageRead(bucket_page_id);
+  auto bucket_page = bucket_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
 
   if (!bucket_page->IsEmpty() || directory_page->GetLocalDepth(bucket_idx) == 0) {
     return;
