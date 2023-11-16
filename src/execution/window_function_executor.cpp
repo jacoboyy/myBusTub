@@ -8,7 +8,7 @@ WindowFunctionExecutor::WindowFunctionExecutor(ExecutorContext *exec_ctx, const 
                                                std::unique_ptr<AbstractExecutor> &&child_executor)
     : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {}
 
-void WindowFunctionExecutor::Init() { throw NotImplementedException("WindowFunctionExecutor is not implemented"); }
+void WindowFunctionExecutor::Init() { child_executor_->Init(); }
 
 auto WindowFunctionExecutor::Next(Tuple *tuple, RID *rid) -> bool { return false; }
 }  // namespace bustub

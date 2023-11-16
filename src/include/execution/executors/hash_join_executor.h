@@ -12,9 +12,12 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <utility>
+#include <vector>
 
+#include "common/util/hash_util.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/hash_join_plan.h"
@@ -22,6 +25,45 @@
 
 namespace bustub {
 
+struct JoinKey {
+  /** The join key values */
+  std::vector<Value> values_;
+
+  /**
+   * Compares two join keys for equality.
+   * @param other the other join key to be compared with
+   * @return `true` if both join keys have equivalent group-by expressions, `false` otherwise
+   */
+  auto operator==(const JoinKey &other) const -> bool {
+    for (uint32_t i = 0; i < other.values_.size(); i++) {
+      if (values_[i].CompareEquals(other.values_[i]) != CmpBool::CmpTrue) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+}  // namespace bustub
+
+namespace std {
+
+/** Implements std::hash on JoinKey */
+template <>
+struct hash<bustub::JoinKey> {
+  auto operator()(const bustub::JoinKey &join_key) const -> std::size_t {
+    size_t curr_hash = 0;
+    for (const auto &key : join_key.values_) {
+      if (!key.IsNull()) {
+        curr_hash = bustub::HashUtil::CombineHashes(curr_hash, bustub::HashUtil::HashValue(&key));
+      }
+    }
+    return curr_hash;
+  }
+};
+
+}  // namespace std
+
+namespace bustub {
 /**
  * HashJoinExecutor executes a nested-loop JOIN on two tables.
  */
@@ -54,6 +96,48 @@ class HashJoinExecutor : public AbstractExecutor {
  private:
   /** The HashJoin plan node to be executed. */
   const HashJoinPlanNode *plan_;
+
+  /** The left table executor */
+  std::unique_ptr<AbstractExecutor> left_executor_;
+
+  /** The right table executor */
+  std::unique_ptr<AbstractExecutor> right_executor_;
+
+  /** Left table schema*/
+  Schema left_schema_;
+
+  /** Right table schema*/
+  Schema right_schema_;
+
+  /** Hashes built on the right table*/
+  std::unordered_map<JoinKey, std::vector<Tuple>> right_hashmap_;
+
+  /** Join type*/
+  JoinType join_type_;
+
+  /** Current left table tuple*/
+  Tuple left_tuple_;
+
+  /** Current idx of the right tuple hashes*/
+  size_t right_idx_;
+
+  /** @return The tuple as an JoinKey */
+  auto MakeLeftJoinKey(const Tuple *tuple) -> JoinKey {
+    std::vector<Value> keys;
+    for (const auto &expr : plan_->LeftJoinKeyExpressions()) {
+      keys.emplace_back(expr->Evaluate(tuple, left_executor_->GetOutputSchema()));
+    }
+    return {keys};
+  }
+
+  /** @return The tuple as an JoinKey */
+  auto MakeRightJoinKey(const Tuple *tuple) -> JoinKey {
+    std::vector<Value> keys;
+    for (const auto &expr : plan_->RightJoinKeyExpressions()) {
+      keys.emplace_back(expr->Evaluate(tuple, right_executor_->GetOutputSchema()));
+    }
+    return {keys};
+  }
 };
 
 }  // namespace bustub

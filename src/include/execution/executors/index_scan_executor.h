@@ -12,12 +12,16 @@
 
 #pragma once
 
+#include <memory>
 #include <vector>
 
+#include "catalog/catalog.h"
 #include "common/rid.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/index_scan_plan.h"
+#include "storage/index/extendible_hash_table_index.h"
+#include "storage/table/table_iterator.h"
 #include "storage/table/tuple.h"
 
 namespace bustub {
@@ -44,5 +48,15 @@ class IndexScanExecutor : public AbstractExecutor {
  private:
   /** The index scan plan node to be executed. */
   const IndexScanPlanNode *plan_;
+
+  IndexInfo *index_info_;
+
+  HashTableIndexForTwoIntegerColumn *htable_;
+
+  size_t idx_ = 0;
+
+  std::vector<RID> result_;
+
+  TableHeap *table_heap_;
 };
 }  // namespace bustub

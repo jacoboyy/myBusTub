@@ -15,6 +15,7 @@
 #include <memory>
 #include <utility>
 
+#include "catalog/schema.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/nested_loop_join_plan.h"
@@ -55,6 +56,36 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
  private:
   /** The NestedLoopJoin plan node to be executed. */
   const NestedLoopJoinPlanNode *plan_;
+
+  /** The left table executor */
+  std::unique_ptr<AbstractExecutor> left_executor_;
+
+  /** The right table executor */
+  std::unique_ptr<AbstractExecutor> right_executor_;
+
+  /** Left table schema*/
+  Schema left_schema_;
+
+  /** Right table schema*/
+  Schema right_schema_;
+
+  /** The current left tuple*/
+  Tuple left_tuple_;
+
+  /** The current right tuple*/
+  Tuple right_tuple_;
+
+  /** Join type*/
+  JoinType join_type_;
+
+  /** Whether the current left tuple is matched with a right tuple*/
+  bool left_matched_;
+
+  /** Whether the join operation has finished*/
+  bool finished_;
+
+  /** Whether the join operation has started*/
+  bool started_;
 };
 
 }  // namespace bustub
