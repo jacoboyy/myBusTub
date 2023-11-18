@@ -26,16 +26,22 @@ auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &pl
       const auto indices = catalog_.GetTableIndexes(table_info->name_);
       if (const auto *comparison_expr = dynamic_cast<const ComparisonExpression *>(seq_scan.filter_predicate_.get());
           comparison_expr != nullptr) {
-        auto &column_value_expr = dynamic_cast<ColumnValueExpression &>(*comparison_expr->GetChildAt(0));
-        auto &constant_value_expr = dynamic_cast<ConstantValueExpression &>(*comparison_expr->GetChildAt(1));
-        // check if there are any matching index on the column
-        for (const auto *index : indices) {
-          const auto &columns = index->key_schema_.GetColumns();
-          if (columns.size() == 1 &&
-              columns[0].GetName() == table_info->schema_.GetColumn(column_value_expr.GetColIdx()).GetName()) {
-            return std::make_shared<IndexScanPlanNode>(optimized_plan->output_schema_, table_info->oid_,
-                                                       index->index_oid_, seq_scan.filter_predicate_,
-                                                       &constant_value_expr);
+        if (const auto *column_value_expr =
+                dynamic_cast<const ColumnValueExpression *>(comparison_expr->GetChildAt(0).get());
+            column_value_expr != nullptr) {
+          if (auto *constant_value_expr = dynamic_cast<ConstantValueExpression *>(comparison_expr->GetChildAt(1).get());
+              constant_value_expr != nullptr) {
+            auto temp = *constant_value_expr;
+            // check if there are any matching index on the column
+            for (const auto *index : indices) {
+              const auto &columns = index->key_schema_.GetColumns();
+              if (columns.size() == 1 &&
+                  columns[0].GetName() == table_info->schema_.GetColumn(column_value_expr->GetColIdx()).GetName()) {
+                return std::make_shared<IndexScanPlanNode>(optimized_plan->output_schema_, table_info->oid_,
+                                                           index->index_oid_, seq_scan.filter_predicate_,
+                                                           constant_value_expr);
+              }
+            }
           }
         }
       }
