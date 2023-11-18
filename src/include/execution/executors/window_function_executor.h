@@ -326,6 +326,8 @@ class WindowFunctionExecutor : public AbstractExecutor {
 
   std::vector<std::pair<SimpleWindowHashTable::Iterator, size_t>> window_ht_iterators_;
 
+  std::unordered_map<size_t, size_t> index_map_;
+
   size_t cur_idx_{0};
 };
 }  // namespace bustub
