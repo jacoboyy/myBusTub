@@ -27,6 +27,7 @@ void DeleteExecutor::Init() {
   table_heap_ = table_info_->table_.get();
   indices_ = catalog->GetTableIndexes(table_name_);
   child_executor_->Init();
+  finished_ = false;  // reset at initialization
 }
 
 auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
