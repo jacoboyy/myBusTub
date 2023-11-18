@@ -24,7 +24,8 @@ auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &pl
     if (seq_scan.filter_predicate_ != nullptr) {
       const auto *table_info = catalog_.GetTable(seq_scan.GetTableOid());
       const auto indices = catalog_.GetTableIndexes(table_info->name_);
-      if (const auto *comparison_expr = dynamic_cast<const ComparisonExpression *>(seq_scan.filter_predicate_.get()); comparison_expr != nullptr){
+      if (const auto *comparison_expr = dynamic_cast<const ComparisonExpression *>(seq_scan.filter_predicate_.get());
+          comparison_expr != nullptr) {
         auto &column_value_expr = dynamic_cast<ColumnValueExpression &>(*comparison_expr->GetChildAt(0));
         auto &constant_value_expr = dynamic_cast<ConstantValueExpression &>(*comparison_expr->GetChildAt(1));
         // check if there are any matching index on the column

@@ -41,13 +41,12 @@ void AggregationExecutor::Init() {
 }
 
 auto AggregationExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  Schema schema(plan_->OutputSchema());
   if (aht_iterator_ != aht_.End()) {
     std::vector<Value> values(aht_iterator_.Key().group_bys_);
     for (const auto &val : aht_iterator_.Val().aggregates_) {
       values.emplace_back(val);
     }
-    *tuple = {values, &schema};
+    *tuple = {values, &plan_->OutputSchema()};
     ++aht_iterator_;
     return true;
   }
