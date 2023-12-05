@@ -1,10 +1,15 @@
 #include "execution/execution_common.h"
+#include <optional>
+#include <vector>
 #include "catalog/catalog.h"
+#include "catalog/column.h"
+#include "catalog/schema.h"
 #include "common/config.h"
 #include "common/macros.h"
 #include "concurrency/transaction_manager.h"
 #include "fmt/core.h"
 #include "storage/table/table_heap.h"
+#include "storage/table/tuple.h"
 #include "type/value.h"
 #include "type/value_factory.h"
 
@@ -12,7 +17,39 @@ namespace bustub {
 
 auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const TupleMeta &base_meta,
                       const std::vector<UndoLog> &undo_logs) -> std::optional<Tuple> {
-  UNIMPLEMENTED("not implemented");
+  auto res_tuple = base_tuple;
+  auto res_meta = base_meta;
+  for (const auto &log : undo_logs) {
+    if (log.is_deleted_) {
+      res_meta.is_deleted_ = true;
+    } else {
+      res_meta.is_deleted_ = false;
+      std::vector<Column> updated_columns;
+      for (size_t idx = 0; idx < schema->GetColumnCount(); idx++) {
+        if (log.modified_fields_[idx]) {
+          updated_columns.emplace_back(schema->GetColumn(idx));
+        }
+      }
+      if (!updated_columns.empty()) {
+        const Schema updated_schema = Schema(updated_columns);
+        std::vector<Value> updated_values;
+        size_t updated_idx = 0;
+        for (size_t idx = 0; idx < schema->GetColumnCount(); idx++) {
+          if (log.modified_fields_[idx]) {
+            updated_values.emplace_back(log.tuple_.GetValue(&updated_schema, updated_idx));
+            updated_idx++;
+          } else {
+            updated_values.emplace_back(res_tuple.GetValue(schema, idx));
+          }
+        }
+        res_tuple = Tuple(updated_values, schema);
+      }
+    }
+  }
+  if (!res_meta.is_deleted_) {
+    return res_tuple;
+  }
+  return {};
 }
 
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
