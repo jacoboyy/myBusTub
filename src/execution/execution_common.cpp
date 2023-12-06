@@ -7,6 +7,7 @@
 #include "catalog/schema.h"
 #include "common/config.h"
 #include "common/macros.h"
+#include "concurrency/transaction.h"
 #include "concurrency/transaction_manager.h"
 #include "fmt/core.h"
 #include "storage/table/table_heap.h"
@@ -114,6 +115,12 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
   // RID=0/3 ts=txn6 <del marker> tuple=(<NULL>, <NULL>, <NULL>)
   //   txn6@0 (6, <NULL>, <NULL>) ts=2
   //   txn3@1 (7, _, _) ts=1
+}
+
+auto IsWriteWriteConflict(timestamp_t tuple_ts, Transaction *txn) -> bool {
+  bool tuple_commited = (tuple_ts & TXN_START_ID) == 0;
+  return (tuple_commited && tuple_ts > txn->GetReadTs()) ||
+         (!tuple_commited && tuple_ts != txn->GetTransactionTempTs());
 }
 
 }  // namespace bustub

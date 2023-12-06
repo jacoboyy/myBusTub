@@ -16,6 +16,9 @@
 #include <utility>
 #include <vector>
 
+#include "common/rid.h"
+#include "concurrency/transaction.h"
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/delete_plan.h"
@@ -76,5 +79,11 @@ class DeleteExecutor : public AbstractExecutor {
 
   /** Flag indicating deletion has finished*/
   bool finished_;
+
+  Transaction *txn_;
+
+  TransactionManager *txn_manager_;
+
+  std::vector<std::pair<const Tuple, const RID>> tuple_rid_pairs_;
 };
 }  // namespace bustub

@@ -16,10 +16,13 @@
 #include <utility>
 #include <vector>
 
+#include "concurrency/transaction.h"
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/update_plan.h"
 #include "storage/table/tuple.h"
+#include "type/value.h"
 #include "type/value_factory.h"
 
 namespace bustub {
@@ -78,5 +81,11 @@ class UpdateExecutor : public AbstractExecutor {
 
   /** Flag indicating insertion has finished **/
   bool finished_;
+
+  Transaction *txn_;
+
+  TransactionManager *txn_manager_;
+
+  std::vector<std::pair<const Tuple, const RID>> tuple_rid_pairs_;
 };
 }  // namespace bustub
