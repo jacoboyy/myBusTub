@@ -29,6 +29,8 @@ void InsertExecutor::Init() {
   indices_ = catalog->GetTableIndexes(table_name_);
   child_executor_->Init();
   finished_ = false;  // reset at each init
+  txn_ = exec_ctx_->GetTransaction();
+  txn_manager_ = exec_ctx_->GetTransactionManager();
 }
 
 auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
@@ -38,9 +40,11 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   int cnt = 0;
   while (child_executor_->Next(tuple, rid)) {
     // insert into table
-    TupleMeta tuple_meta = {INVALID_TXN_ID, false};
+    TupleMeta tuple_meta = {txn_->GetTransactionTempTs(), false};
     auto next_rid = table_heap_->InsertTuple(tuple_meta, *tuple);
     if (next_rid) {
+      // add to write set
+      txn_->AppendWriteSet(plan_->table_oid_, *next_rid);
       // insert into index
       for (auto index : indices_) {
         auto key = tuple->KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs());

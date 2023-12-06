@@ -15,6 +15,8 @@
 #include <memory>
 #include <utility>
 
+#include "concurrency/transaction.h"
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/insert_plan.h"
@@ -75,6 +77,12 @@ class InsertExecutor : public AbstractExecutor {
 
   /** Flag indicating insertion has finished **/
   bool finished_;
+
+  /** The transaction*/
+  Transaction *txn_;
+
+  /** The transaction manager*/
+  TransactionManager *txn_manager_;
 };
 
 }  // namespace bustub
