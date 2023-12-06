@@ -1,4 +1,5 @@
 #include "execution/execution_common.h"
+#include <cstdio>
 #include <optional>
 #include <vector>
 #include "catalog/catalog.h"
@@ -9,6 +10,7 @@
 #include "concurrency/transaction_manager.h"
 #include "fmt/core.h"
 #include "storage/table/table_heap.h"
+#include "storage/table/table_iterator.h"
 #include "storage/table/tuple.h"
 #include "type/value.h"
 #include "type/value_factory.h"
@@ -57,10 +59,46 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
   // always use stderr for printing logs...
   fmt::println(stderr, "debug_hook: {}", info);
 
-  fmt::println(
-      stderr,
-      "You see this line of text because you have not implemented `TxnMgrDbg`. You should do this once you have "
-      "finished task 2. Implementing this helper function will save you a lot of time for debugging in later tasks.");
+  TableIterator table_iterator = table_heap->MakeEagerIterator();
+  while (!table_iterator.IsEnd()) {
+    auto rid = table_iterator.GetRID();
+    auto tuple_meta = table_iterator.GetTuple().first;
+    auto tuple = table_iterator.GetTuple().second;
+
+    // print current tuple
+    auto delete_marker = tuple_meta.is_deleted_ ? "<delete_marker>" : "";
+    if ((tuple_meta.ts_ & TXN_START_ID) != 0) {
+      fmt::println(stderr, "RID:{}/{} ts=txn{} {} tuple={}", rid.GetPageId(), rid.GetSlotNum(),
+                   (tuple_meta.ts_ ^ TXN_START_ID), delete_marker, tuple.ToString(&table_info->schema_));
+    } else {
+      fmt::println(stderr, "RID:{}/{} ts={} {} tuple={}", rid.GetPageId(), rid.GetSlotNum(), tuple_meta.ts_,
+                   delete_marker, tuple.ToString(&table_info->schema_));
+    }
+
+    // print version link
+    auto undo_link = txn_mgr->GetUndoLink(rid);
+    if (undo_link.has_value()) {
+      while (undo_link->IsValid()) {
+        auto undo_log = txn_mgr->GetUndoLog(undo_link.value());
+        if (undo_log.is_deleted_) {
+          fmt::println(stderr, "   txn{}@{} <del> ts={}", (undo_link->prev_txn_ ^ TXN_START_ID),
+                       undo_link->prev_log_idx_, undo_log.ts_);
+        } else {
+          std::vector<Column> updated_columns;
+          for (size_t idx = 0; idx < table_info->schema_.GetColumnCount(); idx++) {
+            if (undo_log.modified_fields_[idx]) {
+              updated_columns.emplace_back(table_info->schema_.GetColumn(idx));
+            }
+          }
+          const Schema updated_schema = Schema(updated_columns);
+          fmt::println(stderr, "   txn{}@{} {} ts={}", (undo_link->prev_txn_ ^ TXN_START_ID), undo_link->prev_log_idx_,
+                       undo_log.tuple_.ToString(&updated_schema), undo_log.ts_);
+        }
+        undo_link = undo_log.prev_version_;
+      }
+    }
+    ++table_iterator;
+  }
 
   // We recommend implementing this function as traversing the table heap and print the version chain. An example output
   // of our reference solution:
