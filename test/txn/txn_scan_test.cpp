@@ -219,15 +219,19 @@ TEST(TxnScanTest, DISABLED_ScanTest) {  // NOLINT
   // you should think about types other than integer, and think of the case where the user updates / inserts
   // a column of null.
 
-  // auto query_int = "SELECT a FROM maintable";
-  // fmt::println(stderr, "C: Verify txn2");
-  // WithTxn(txn2, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
-  // fmt::println(stderr, "D: Verify txn3");
-  // WithTxn(txn3, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
-  // fmt::println(stderr, "E: Verify txn4");
-  // WithTxn(txn4, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
-  // fmt::println(stderr, "F: Verify txn5");
-  // WithTxn(txn5, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
+  query = "SELECT a FROM maintable";
+  fmt::println(stderr, "C: Verify txn2");
+  WithTxn(txn2, QueryShowResult(*bustub, _var, _txn, query,
+                                AnyResult{{"2"}, {"6"}}));  // <- you will need to fill in the answer
+  fmt::println(stderr, "D: Verify txn3");
+  WithTxn(txn3, QueryShowResult(*bustub, _var, _txn, query,
+                                AnyResult{{"2"}, {"3"}, {"5"}}));  // <- you will need to fill in th answer
+  fmt::println(stderr, "E: Verify txn4");
+  WithTxn(txn4, QueryShowResult(*bustub, _var, _txn, query,
+                                AnyResult{{"1"}, {"3"}, {"6"}}));  // <- you will need to fill in the answer
+  fmt::println(stderr, "F: Verify txn5");
+  WithTxn(txn5, QueryShowResult(*bustub, _var, _txn, query,
+                                AnyResult{{"2"}, {"3"}, {"6"}}));  // <- you will need to fill in the answer
 }
 
 // NOLINTEND(bugprone-unchecked-optional-access))
