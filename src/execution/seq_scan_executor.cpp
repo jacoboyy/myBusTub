@@ -45,15 +45,14 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         (tuple_commited && cur_tuple_meta.ts_ <= txn_->GetReadTs())) {
       if (!cur_tuple_meta.is_deleted_) {
         *tuple = cur_tuple;
-        return true;
         // check if the plan node has any filter predicates [Not needed in Q4]
-        // if (filter_expr == nullptr) {
-        //   return true;
-        // }
-        // auto value = filter_expr->Evaluate(tuple, GetOutputSchema());
-        // if (!value.IsNull() && value.GetAs<bool>()) {
-        //   return true;
-        // }
+        if (filter_expr == nullptr) {
+          return true;
+        }
+        auto value = filter_expr->Evaluate(tuple, GetOutputSchema());
+        if (!value.IsNull() && value.GetAs<bool>()) {
+          return true;
+        }
       }
     } else {
       auto undo_link_opt = txn_manager_->GetUndoLink(*rid);
@@ -63,11 +62,18 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         while (undo_link.IsValid()) {
           auto undo_log = txn_manager_->GetUndoLog(undo_link);
           undo_logs.emplace_back(undo_log);
-          auto next_tuple_opt = ReconstructTuple(&GetOutputSchema(), cur_tuple, cur_tuple_meta, undo_logs);
+          auto next_tuple = ReconstructTuple(&GetOutputSchema(), cur_tuple, cur_tuple_meta, undo_logs);
           if (undo_log.ts_ <= txn_->GetReadTs()) {
-            if (next_tuple_opt.has_value()) {
-              *tuple = next_tuple_opt.value();
-              return true;
+            if (next_tuple) {
+              *tuple = *next_tuple;
+              // check if the plan node has any filter predicates
+              if (filter_expr == nullptr) {
+                return true;
+              }
+              auto value = filter_expr->Evaluate(tuple, GetOutputSchema());
+              if (!value.IsNull() && value.GetAs<bool>()) {
+                return true;
+              }
             }
             break;
           }
