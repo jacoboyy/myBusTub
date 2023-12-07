@@ -106,6 +106,63 @@ void TransactionManager::Abort(Transaction *txn) {
   running_txns_.RemoveTxn(txn->read_ts_);
 }
 
-void TransactionManager::GarbageCollection() { UNIMPLEMENTED("not implemented"); }
+void TransactionManager::GarbageCollection() {
+  // all the transactions are initialized placed in the garbage list
+  std::unordered_set<txn_id_t> garbages;
+  for (auto &pair : txn_map_) {
+    garbages.insert(pair.first);
+  }
+  // traverse all tables
+  for (const auto &name : catalog_->GetTableNames()) {
+    auto table_info = catalog_->GetTable(name);
+    auto &table_heap = table_info->table_;
+    // traverse the table heap
+    auto it = table_heap->MakeIterator();
+    while (!it.IsEnd()) {
+      auto rid = it.GetRID();
+      auto undo_link = GetUndoLink(rid);
+      auto tuple_meta = it.GetTuple().first;
+      auto tuple = it.GetTuple().second;
+      if (tuple_meta.ts_ <= GetWatermark()) {
+        if (undo_link) {
+          undo_link->prev_txn_ = INVALID_TXN_ID;
+        }
+      }
+      // traverse the version chain
+      while (undo_link && undo_link->IsValid()) {
+        auto undo_log = GetUndoLog(*undo_link);
+        auto txn_id = undo_link->prev_txn_;
+        auto next_tuple = ReconstructTuple(&table_info->schema_, tuple, tuple_meta, {undo_log});
+        if (!next_tuple) {
+          break;
+        }
+        // remove the current transaction from the garbage set
+        if (garbages.find(txn_id) != garbages.end()) {
+          garbages.erase(txn_id);
+        }
+        // stop the version train traversal when the timestamp of the undo log is below or equal to the watermark
+        if (undo_log.ts_ <= GetWatermark()) {
+          // remove dangling pointers
+          undo_log.prev_version_.prev_txn_ = INVALID_TXN_ID;
+          break;
+        }
+        tuple = *next_tuple;
+        undo_link = undo_log.prev_version_;
+      }
+      ++it;
+    }
+
+    // erase garabe transaction from txn_map_
+    for (auto &txn_id : garbages) {
+      if (txn_map_.find(txn_id) != txn_map_.end()) {
+        auto txn = txn_map_.at(txn_id);
+        // only remove commited or aborted transactions
+        if (txn->state_ == TransactionState::COMMITTED || txn->state_ == TransactionState::ABORTED) {
+          txn_map_.erase(txn_id);
+        }
+      }
+    }
+  }
+}
 
 }  // namespace bustub

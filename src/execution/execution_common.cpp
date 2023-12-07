@@ -78,25 +78,24 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
 
     // print version link
     auto undo_link = txn_mgr->GetUndoLink(rid);
-    if (undo_link.has_value()) {
-      while (undo_link->IsValid()) {
-        auto undo_log = txn_mgr->GetUndoLog(undo_link.value());
-        if (undo_log.is_deleted_) {
-          fmt::println(stderr, "   txn{}@{} <del> ts={}", (undo_link->prev_txn_ ^ TXN_START_ID),
-                       undo_link->prev_log_idx_, undo_log.ts_);
-        } else {
-          std::vector<Column> updated_columns;
-          for (size_t idx = 0; idx < table_info->schema_.GetColumnCount(); idx++) {
-            if (undo_log.modified_fields_[idx]) {
-              updated_columns.emplace_back(table_info->schema_.GetColumn(idx));
-            }
+    while (undo_link && undo_link->IsValid()) {
+      auto undo_log = txn_mgr->GetUndoLog(*undo_link);
+      if (undo_log.is_deleted_) {
+        fmt::println(stderr, "   txn{}@{} <del> ts={}", (undo_link->prev_txn_ ^ TXN_START_ID),
+        undo_link->prev_log_idx_,
+                     undo_log.ts_);
+      } else {
+        std::vector<Column> updated_columns;
+        for (size_t idx = 0; idx < table_info->schema_.GetColumnCount(); idx++) {
+          if (undo_log.modified_fields_[idx]) {
+            updated_columns.emplace_back(table_info->schema_.GetColumn(idx));
           }
-          const Schema updated_schema = Schema(updated_columns);
-          fmt::println(stderr, "   txn{}@{} {} ts={}", (undo_link->prev_txn_ ^ TXN_START_ID), undo_link->prev_log_idx_,
-                       undo_log.tuple_.ToString(&updated_schema), undo_log.ts_);
         }
-        undo_link = undo_log.prev_version_;
+        const Schema updated_schema = Schema(updated_columns);
+        fmt::println(stderr, "   txn{}@{} {} ts={}", (undo_link->prev_txn_ ^ TXN_START_ID), undo_link->prev_log_idx_,
+                     undo_log.tuple_.ToString(&updated_schema), undo_log.ts_);
       }
+      undo_link = undo_log.prev_version_;
     }
     ++table_iterator;
   }
