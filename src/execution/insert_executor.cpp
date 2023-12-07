@@ -13,6 +13,7 @@
 #include <memory>
 #include <utility>
 
+#include "common/exception.h"
 #include "execution/executors/insert_executor.h"
 
 namespace bustub {
@@ -39,17 +40,32 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   }
   int cnt = 0;
   while (child_executor_->Next(tuple, rid)) {
+    // check if key already exists in index
+    for (auto index : indices_) {
+      auto key = tuple->KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs());
+      std::vector<RID> index_res;
+      index->index_->ScanKey(key, &index_res, txn_);
+      if (!index_res.empty()) {
+        // key already exists index: abort transaction
+        txn_->SetTainted();
+        throw ExecutionException("key already exists in index");
+      }
+    }
     // insert into table
     TupleMeta tuple_meta = {txn_->GetTransactionTempTs(), false};
     auto next_rid = table_heap_->InsertTuple(tuple_meta, *tuple);
     if (next_rid) {
-      // add to write set
-      txn_->AppendWriteSet(plan_->table_oid_, *next_rid);
       // insert into index
       for (auto index : indices_) {
         auto key = tuple->KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs());
-        index->index_->InsertEntry(key, *next_rid, exec_ctx_->GetTransaction());
+        // insertion fails: duplicate key
+        if (!index->index_->InsertEntry(key, *next_rid, exec_ctx_->GetTransaction())) {
+          txn_->SetTainted();
+          throw ExecutionException("key duplicated during index insertion");
+        }
       }
+      // add to write set
+      txn_->AppendWriteSet(plan_->table_oid_, *next_rid);
     }
     ++cnt;
   }
