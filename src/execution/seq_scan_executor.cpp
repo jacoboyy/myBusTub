@@ -31,54 +31,50 @@ void SeqScanExecutor::Init() {
 }
 
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  auto filter_expr = plan_->filter_predicate_;
   while (!iterator_->IsEnd()) {
-    auto cur_tuple_meta = iterator_->GetTuple().first;
-    auto cur_tuple = iterator_->GetTuple().second;
+    auto [cur_tuple_meta, cur_tuple] = iterator_->GetTuple();
     *rid = iterator_->GetRID();
     // increment the iterator
     iterator_->operator++();
-
     // check current tuple
     bool tuple_commited = (cur_tuple_meta.ts_ & TXN_START_ID) == 0;
     if (txn_->GetTransactionTempTs() == cur_tuple_meta.ts_ ||
         (tuple_commited && cur_tuple_meta.ts_ <= txn_->GetReadTs())) {
       if (!cur_tuple_meta.is_deleted_) {
         *tuple = cur_tuple;
-        // check if the plan node has any filter predicates [Not needed in Q4]
-        if (filter_expr == nullptr) {
+        // check if the plan node has any filter predicates
+        if (plan_->filter_predicate_ == nullptr) {
           return true;
         }
-        auto value = filter_expr->Evaluate(tuple, GetOutputSchema());
+        auto value = plan_->filter_predicate_->Evaluate(tuple, GetOutputSchema());
         if (!value.IsNull() && value.GetAs<bool>()) {
           return true;
         }
       }
     } else {
-      auto undo_link_opt = txn_manager_->GetUndoLink(*rid);
-      if (undo_link_opt.has_value()) {
-        auto undo_link = undo_link_opt.value();
-        std::vector<UndoLog> undo_logs;
-        while (undo_link.IsValid()) {
-          auto undo_log = txn_manager_->GetUndoLog(undo_link);
-          undo_logs.emplace_back(undo_log);
-          auto next_tuple = ReconstructTuple(&GetOutputSchema(), cur_tuple, cur_tuple_meta, undo_logs);
-          if (undo_log.ts_ <= txn_->GetReadTs()) {
-            if (next_tuple) {
-              *tuple = *next_tuple;
-              // check if the plan node has any filter predicates
-              if (filter_expr == nullptr) {
-                return true;
-              }
-              auto value = filter_expr->Evaluate(tuple, GetOutputSchema());
-              if (!value.IsNull() && value.GetAs<bool>()) {
-                return true;
-              }
+      auto undo_link = txn_manager_->GetUndoLink(*rid);
+      while (undo_link && undo_link->IsValid()) {
+        auto undo_log = txn_manager_->GetUndoLog(*undo_link);
+        auto next_tuple = ReconstructTuple(&GetOutputSchema(), cur_tuple, cur_tuple_meta, {undo_log});
+        if (undo_log.ts_ <= txn_->GetReadTs()) {
+          if (next_tuple) {
+            *tuple = *next_tuple;
+            if (plan_->filter_predicate_ == nullptr) {
+              return true;
             }
-            break;
+            auto value = plan_->filter_predicate_->Evaluate(tuple, GetOutputSchema());
+            if (!value.IsNull() && value.GetAs<bool>()) {
+              return true;
+            }
           }
-          undo_link = undo_log.prev_version_;
+          // snapshot tuple is deleted or doesn't satisfy filter condition: skip
+          break;
         }
+        if (undo_log.ts_ <= txn_manager_->GetWatermark()) {
+          // skip previous version if already at watermark boundary
+          break;
+        }
+        undo_link = undo_log.prev_version_;
       }
     }
   }

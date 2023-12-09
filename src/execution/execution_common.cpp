@@ -75,14 +75,16 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
       fmt::println(stderr, "RID:{}/{} ts={} {} tuple={}", rid.GetPageId(), rid.GetSlotNum(), tuple_meta.ts_,
                    delete_marker, tuple.ToString(&table_info->schema_));
     }
-
+    // skip previous log if lower than watermark
+    if (tuple_meta.ts_ <= txn_mgr->GetWatermark()) {
+      break;
+    }
     // print version link
     auto undo_link = txn_mgr->GetUndoLink(rid);
     while (undo_link && undo_link->IsValid()) {
       auto undo_log = txn_mgr->GetUndoLog(*undo_link);
       if (undo_log.is_deleted_) {
-        fmt::println(stderr, "   txn{}@{} <del> ts={}", (undo_link->prev_txn_ ^ TXN_START_ID),
-        undo_link->prev_log_idx_,
+        fmt::println(stderr, "   txn{}@{} <del> ts={}", (undo_link->prev_txn_ ^ TXN_START_ID), undo_link->prev_log_idx_,
                      undo_log.ts_);
       } else {
         std::vector<Column> updated_columns;
@@ -96,6 +98,10 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
                      undo_log.tuple_.ToString(&updated_schema), undo_log.ts_);
       }
       undo_link = undo_log.prev_version_;
+      // skip previous version if lower than watermark
+      if (undo_log.ts_ <= txn_mgr->GetWatermark()) {
+        break;
+      }
     }
     ++table_iterator;
   }
