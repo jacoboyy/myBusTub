@@ -67,9 +67,8 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     // detect write-write conflict
     if (IsWriteWriteConflict(old_tuple_meta.ts_, txn_)) {
       finished_ = true;
-      // set tainted
+      // set tainted and throw exception
       txn_->SetTainted();
-      // throw exception
       throw ExecutionException("write-write conflict detected!");
     }
     if (tuple_commited) {

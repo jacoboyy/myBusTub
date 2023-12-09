@@ -123,36 +123,32 @@ void TransactionManager::GarbageCollection() {
       auto undo_link = GetUndoLink(rid);
       auto tuple_meta = it.GetTuple().first;
       auto tuple = it.GetTuple().second;
-      if (tuple_meta.ts_ <= GetWatermark()) {
-        if (undo_link) {
-          undo_link->prev_txn_ = INVALID_TXN_ID;
+      // skip if first tuple is already below or equal to the watermark
+      if (tuple_meta.ts_ > GetWatermark()) {
+        // traverse the version chain
+        while (undo_link && undo_link->IsValid()) {
+          auto undo_log = GetUndoLog(*undo_link);
+          auto txn_id = undo_link->prev_txn_;
+          auto next_tuple = ReconstructTuple(&table_info->schema_, tuple, tuple_meta, {undo_log});
+          if (!next_tuple) {
+            break;
+          }
+          // remove the current transaction from the garbage set
+          if (garbages.find(txn_id) != garbages.end()) {
+            garbages.erase(txn_id);
+          }
+          // stop the version train traversal when the timestamp of the undo log is below or equal to the watermark
+          if (undo_log.ts_ <= GetWatermark()) {
+            break;
+          }
+          tuple = *next_tuple;
+          undo_link = undo_log.prev_version_;
         }
-      }
-      // traverse the version chain
-      while (undo_link && undo_link->IsValid()) {
-        auto undo_log = GetUndoLog(*undo_link);
-        auto txn_id = undo_link->prev_txn_;
-        auto next_tuple = ReconstructTuple(&table_info->schema_, tuple, tuple_meta, {undo_log});
-        if (!next_tuple) {
-          break;
-        }
-        // remove the current transaction from the garbage set
-        if (garbages.find(txn_id) != garbages.end()) {
-          garbages.erase(txn_id);
-        }
-        // stop the version train traversal when the timestamp of the undo log is below or equal to the watermark
-        if (undo_log.ts_ <= GetWatermark()) {
-          // remove dangling pointers
-          undo_log.prev_version_.prev_txn_ = INVALID_TXN_ID;
-          break;
-        }
-        tuple = *next_tuple;
-        undo_link = undo_log.prev_version_;
       }
       ++it;
     }
 
-    // erase garabe transaction from txn_map_
+    // erase garbage transaction from txn_map_
     for (auto &txn_id : garbages) {
       if (txn_map_.find(txn_id) != txn_map_.end()) {
         auto txn = txn_map_.at(txn_id);
